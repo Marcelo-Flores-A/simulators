@@ -70,7 +70,7 @@ class Predator:
         self.patrol_radius = random.uniform(80, 120)
         self.patrol_angle = random.uniform(0, 2 * math.pi)
 
-    def update(self, delta_time, player_x, player_y, window_width, window_height):
+    def update(self, delta_time, player_x, player_y, window_width, window_height, fruits=None):
         self.state_timer += delta_time
         self.reaction_timer += delta_time
         self.hesitation_timer += delta_time
@@ -86,13 +86,18 @@ class Predator:
         # Distance to player
         distance_to_player = math.sqrt((self.center_x - player_x)**2 + (self.center_y - player_y)**2)
         
-        # State management
-        if distance_to_player < 100:
+        # Check if player is moving (velocity magnitude above threshold)
+        player_speed = math.sqrt(self.player_velocity_x**2 + self.player_velocity_y**2)
+        player_is_moving = player_speed > 50.0  # Movement threshold (pixels per second)
+        
+        # Enhanced state management - hunting only if player is close AND moving
+        if distance_to_player < 100 and player_is_moving:
             self.state = "hunting"
-        elif distance_to_player > 200 and self.state == "hunting":
+        elif distance_to_player > 100 and distance_to_player < 200 and player_is_moving:
             self.state = "intercepting"
-        elif distance_to_player > 300:
-            self.state = "patrolling"
+        else:
+            # Player is far away, close but stationary, or at medium distance but stationary
+            self.state = "guarding"
         
         # Random hesitation (human-like uncertainty)
         if self.hesitation_timer > random.uniform(3.0, 8.0):
@@ -104,7 +109,7 @@ class Predator:
             self.hesitation_timer = 0.0
         
         # Calculate target based on state
-        self._calculate_target(player_x, player_y, distance_to_player)
+        self._calculate_target(player_x, player_y, distance_to_player, fruits)
         
         # Apply human-like imperfection
         if not self.is_hesitating:
@@ -125,7 +130,7 @@ class Predator:
         if abs(self.velocity_x) > 0.1 or abs(self.velocity_y) > 0.1:
             self.rotation = math.atan2(self.velocity_y, self.velocity_x)
 
-    def _calculate_target(self, player_x, player_y, distance):
+    def _calculate_target(self, player_x, player_y, distance, fruits=None):
         """Calculate the target position based on current AI state."""
         if self.state == "hunting":
             # Direct pursuit with slight prediction
@@ -145,17 +150,79 @@ class Predator:
             else:
                 self.target_x += 50 * (1 if self.center_x < player_x else -1)
                 
-        elif self.state == "patrolling":
-            # Patrol in a circle around the area
-            self.patrol_angle += 0.5 * 0.016  # Approximate delta_time for smooth patrol
-            self.target_x = self.patrol_center_x + math.cos(self.patrol_angle) * self.patrol_radius
-            self.target_y = self.patrol_center_y + math.sin(self.patrol_angle) * self.patrol_radius
+        elif self.state == "guarding":
+            # Find the area with highest fruit density
+            if fruits and len(fruits) > 0:
+                best_zone = self._find_fruit_dense_zone(fruits)
+                if best_zone:
+                    # Update patrol center to the new fruit-dense area (but don't move there instantly)
+                    distance_to_new_center = math.sqrt((self.patrol_center_x - best_zone[0])**2 + 
+                                                     (self.patrol_center_y - best_zone[1])**2)
+                    
+                    # Only update patrol center if the new zone is significantly different
+                    if distance_to_new_center > 80:
+                        self.patrol_center_x = best_zone[0]
+                        self.patrol_center_y = best_zone[1]
+                    
+                    # Patrol in a circle around the fruit-dense area
+                    self.patrol_angle += 0.8 * 0.016  # Slightly faster patrol for more dynamic movement
+                    patrol_x = self.patrol_center_x + math.cos(self.patrol_angle) * self.patrol_radius
+                    patrol_y = self.patrol_center_y + math.sin(self.patrol_angle) * self.patrol_radius
+                    
+                    self.target_x = patrol_x
+                    self.target_y = patrol_y
+                else:
+                    # Fallback to normal patrol if no fruits found
+                    self.patrol_angle += 0.5 * 0.016
+                    self.target_x = self.patrol_center_x + math.cos(self.patrol_angle) * self.patrol_radius
+                    self.target_y = self.patrol_center_y + math.sin(self.patrol_angle) * self.patrol_radius
+            else:
+                # Fallback to normal patrol if no fruits provided
+                self.patrol_angle += 0.5 * 0.016
+                self.target_x = self.patrol_center_x + math.cos(self.patrol_angle) * self.patrol_radius
+                self.target_y = self.patrol_center_y + math.sin(self.patrol_angle) * self.patrol_radius
         
         # Apply accuracy imperfection
         error_x = random.uniform(-20, 20) * (1.0 - self.accuracy)
         error_y = random.uniform(-20, 20) * (1.0 - self.accuracy)
         self.target_x += error_x
         self.target_y += error_y
+
+    def _find_fruit_dense_zone(self, fruits):
+        """Find the zone with the highest concentration of fruits."""
+        if not fruits:
+            return None
+        
+        # Define grid size for density analysis
+        grid_size = 120  # Size of each zone to analyze
+        window_width = 960  # Use constants since we don't have access to window here
+        window_height = 540
+        
+        best_zone = None
+        max_density = 0
+        
+        # Analyze different zones across the map
+        for x in range(grid_size // 2, window_width, grid_size // 2):
+            for y in range(grid_size // 2, window_height, grid_size // 2):
+                # Count fruits in this zone
+                fruit_count = 0
+                for fruit in fruits:
+                    distance_to_zone = math.sqrt((fruit.center_x - x)**2 + (fruit.center_y - y)**2)
+                    if distance_to_zone <= grid_size:
+                        fruit_count += 1
+                
+                # Weight by distance from predator (prefer closer dense zones)
+                distance_from_predator = math.sqrt((self.center_x - x)**2 + (self.center_y - y)**2)
+                # Normalize distance (closer zones get higher weight)
+                distance_weight = max(0.1, 1.0 - (distance_from_predator / 400))
+                
+                density_score = fruit_count * distance_weight
+                
+                if density_score > max_density:
+                    max_density = density_score
+                    best_zone = (x, y)
+        
+        return best_zone
 
     def _move_towards_target(self, delta_time):
         """Move towards target with smooth acceleration and human-like movement."""
@@ -213,9 +280,17 @@ class Predator:
             self.velocity_y = -abs(self.velocity_y) * 0.8
 
     def draw(self):
-        """Draw the predator with directional indicator."""
+        """Draw the predator with directional indicator and behavior-based color."""
+        # Set color based on behavior state
+        if self.state == "hunting":
+            color = arcade.color.RED  # Red for hunting (most dangerous)
+        elif self.state == "intercepting":
+            color = arcade.color.ORANGE  # Orange for intercepting (moderately dangerous)
+        else:  # guarding
+            color = arcade.color.YELLOW  # Yellow for guarding (least dangerous)
+        
         # Draw main body
-        arcade.draw_circle_filled(self.center_x, self.center_y, self.size // 2, self.color)
+        arcade.draw_circle_filled(self.center_x, self.center_y, self.size // 2, color)
         
         # Draw direction indicator (small triangle pointing in movement direction)
         if abs(self.velocity_x) > 0.1 or abs(self.velocity_y) > 0.1:
@@ -426,7 +501,7 @@ class GameView(arcade.View):
                 if dist_to_p2 < dist_to_p1:
                     target_x, target_y = self.player2.center_x, self.player2.center_y
             
-            predator.update(delta_time, target_x, target_y, self.window.width, self.window.height)
+            predator.update(delta_time, target_x, target_y, self.window.width, self.window.height, self.fruits)
 
         # Check fruit collection for player 1
         fruits_to_remove = []
