@@ -606,19 +606,26 @@ class GameView(arcade.View):
 
 
 class TextButton:
-    """A simple text-based button that changes color on hover."""
+    """A simple text-based button that changes color on hover or selection."""
     def __init__(self, x, y, text, on_click_action):
         self.center_x = x
         self.center_y = y
         self.text = text
         self.on_click = on_click_action
         self.hovered = False
+        self.selected = False  # For keyboard navigation
         self.width = len(text) * 12  # Approximate text width
         self.height = 30
 
     def draw(self):
-        """Draw the text button with hover effect."""
-        color = arcade.color.AZURE if self.hovered else arcade.color.WHITE
+        """Draw the text button with hover/selection effect."""
+        if self.selected:
+            color = arcade.color.YELLOW  # Yellow for keyboard selection
+        elif self.hovered:
+            color = arcade.color.AZURE  # Azure for mouse hover
+        else:
+            color = arcade.color.WHITE  # White for normal state
+            
         arcade.draw_text(
             self.text, 
             self.center_x, 
@@ -642,6 +649,7 @@ class MenuView(arcade.View):
     def __init__(self):
         super().__init__()
         self.buttons: List[TextButton] = []
+        self.selected_button_index = 0  # Track which button is selected
         self.setup()
 
     def setup(self):
@@ -674,6 +682,10 @@ class MenuView(arcade.View):
         # Update button positions based on current window size
         self.update_button_positions()
         
+        # Update button selection states
+        for i, button in enumerate(self.buttons):
+            button.selected = (i == self.selected_button_index)
+        
         arcade.draw_text(
             "Simulator Menu",
             self.window.width / 2,
@@ -685,7 +697,7 @@ class MenuView(arcade.View):
         
         # Draw instructions
         arcade.draw_text(
-            "Click on an option below:",
+            "Use WASD/Arrows to navigate, Enter to select, or click:",
             self.window.width / 2,
             self.window.height - 150,
             arcade.color.LIGHT_GRAY,
@@ -706,6 +718,19 @@ class MenuView(arcade.View):
         for btn in self.buttons:
             if btn.hovered:
                 btn.on_click()
+
+    def on_key_press(self, symbol: int, modifiers: int):
+        """Handle keyboard navigation."""
+        if symbol in [arcade.key.W, arcade.key.UP]:
+            # Move selection up
+            self.selected_button_index = (self.selected_button_index - 1) % len(self.buttons)
+        elif symbol in [arcade.key.S, arcade.key.DOWN]:
+            # Move selection down
+            self.selected_button_index = (self.selected_button_index + 1) % len(self.buttons)
+        elif symbol == arcade.key.ENTER:
+            # Activate selected button
+            if 0 <= self.selected_button_index < len(self.buttons):
+                self.buttons[self.selected_button_index].on_click()
 
 
 def main():
