@@ -31,48 +31,201 @@ class Fruit:
 
 
 class Predator:
-    """A simple predator that chases the player."""
+    """An intelligent predator with human-like tracking behavior."""
     def __init__(self, x, y):
         self.center_x = x
         self.center_y = y
         self.size = PREDATOR_SIZE
         self.color = arcade.color.RED
-        self.direction_x = random.choice([-1, 1])
-        self.direction_y = random.choice([-1, 1])
-        self.change_direction_timer = 0
+        
+        # Movement and physics
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self.max_speed = PREDATOR_SPEED
+        self.acceleration = 400.0
+        self.rotation = 0.0  # Visual rotation angle
+        
+        # AI behavior states
+        self.state = "hunting"  # hunting, patrolling, intercepting
+        self.state_timer = 0.0
+        self.reaction_delay = random.uniform(0.1, 0.3)  # Human-like reaction time
+        self.reaction_timer = 0.0
+        
+        # Target tracking
+        self.target_x = x
+        self.target_y = y
+        self.last_player_x = x
+        self.last_player_y = y
+        self.player_velocity_x = 0.0
+        self.player_velocity_y = 0.0
+        
+        # Human-like imperfection
+        self.accuracy = random.uniform(0.7, 0.95)  # How accurate the predator is
+        self.hesitation_timer = 0.0
+        self.is_hesitating = False
+        
+        # Patrol behavior
+        self.patrol_center_x = x
+        self.patrol_center_y = y
+        self.patrol_radius = random.uniform(80, 120)
+        self.patrol_angle = random.uniform(0, 2 * math.pi)
 
     def update(self, delta_time, player_x, player_y, window_width, window_height):
-        # Simple AI: move towards player with some randomness
-        self.change_direction_timer += delta_time
+        self.state_timer += delta_time
+        self.reaction_timer += delta_time
+        self.hesitation_timer += delta_time
         
-        if self.change_direction_timer > 2.0:  # Change direction every 2 seconds
-            self.change_direction_timer = 0
-            if random.random() < 0.7:  # 70% chance to move towards player
-                self.direction_x = 1 if player_x > self.center_x else -1
-                self.direction_y = 1 if player_y > self.center_y else -1
-            else:  # 30% chance for random movement
-                self.direction_x = random.choice([-1, 1])
-                self.direction_y = random.choice([-1, 1])
+        # Calculate player velocity for prediction
+        if self.reaction_timer >= self.reaction_delay:
+            self.player_velocity_x = (player_x - self.last_player_x) / self.reaction_delay
+            self.player_velocity_y = (player_y - self.last_player_y) / self.reaction_delay
+            self.last_player_x = player_x
+            self.last_player_y = player_y
+            self.reaction_timer = 0.0
+        
+        # Distance to player
+        distance_to_player = math.sqrt((self.center_x - player_x)**2 + (self.center_y - player_y)**2)
+        
+        # State management
+        if distance_to_player < 100:
+            self.state = "hunting"
+        elif distance_to_player > 200 and self.state == "hunting":
+            self.state = "intercepting"
+        elif distance_to_player > 300:
+            self.state = "patrolling"
+        
+        # Random hesitation (human-like uncertainty)
+        if self.hesitation_timer > random.uniform(3.0, 8.0):
+            self.is_hesitating = True
+            self.hesitation_timer = 0.0
+        
+        if self.is_hesitating and self.hesitation_timer > random.uniform(0.2, 0.8):
+            self.is_hesitating = False
+            self.hesitation_timer = 0.0
+        
+        # Calculate target based on state
+        self._calculate_target(player_x, player_y, distance_to_player)
+        
+        # Apply human-like imperfection
+        if not self.is_hesitating:
+            self._move_towards_target(delta_time)
+        else:
+            # Slow down when hesitating
+            self.velocity_x *= 0.5
+            self.velocity_y *= 0.5
+        
+        # Update position
+        self.center_x += self.velocity_x * delta_time
+        self.center_y += self.velocity_y * delta_time
+        
+        # Handle wall collisions with more natural bouncing
+        self._handle_wall_collisions(window_width, window_height)
+        
+        # Update visual rotation
+        if abs(self.velocity_x) > 0.1 or abs(self.velocity_y) > 0.1:
+            self.rotation = math.atan2(self.velocity_y, self.velocity_x)
 
-        # Move predator
-        self.center_x += self.direction_x * PREDATOR_SPEED * delta_time
-        self.center_y += self.direction_y * PREDATOR_SPEED * delta_time
+    def _calculate_target(self, player_x, player_y, distance):
+        """Calculate the target position based on current AI state."""
+        if self.state == "hunting":
+            # Direct pursuit with slight prediction
+            prediction_time = distance / self.max_speed * 0.3
+            self.target_x = player_x + self.player_velocity_x * prediction_time
+            self.target_y = player_y + self.player_velocity_y * prediction_time
+            
+        elif self.state == "intercepting":
+            # Predictive interception
+            prediction_time = distance / self.max_speed * 0.8
+            self.target_x = player_x + self.player_velocity_x * prediction_time
+            self.target_y = player_y + self.player_velocity_y * prediction_time
+            
+            # Add some strategic offset to cut off escape routes
+            if abs(self.player_velocity_x) > abs(self.player_velocity_y):
+                self.target_y += 50 * (1 if self.center_y < player_y else -1)
+            else:
+                self.target_x += 50 * (1 if self.center_x < player_x else -1)
+                
+        elif self.state == "patrolling":
+            # Patrol in a circle around the area
+            self.patrol_angle += 0.5 * 0.016  # Approximate delta_time for smooth patrol
+            self.target_x = self.patrol_center_x + math.cos(self.patrol_angle) * self.patrol_radius
+            self.target_y = self.patrol_center_y + math.sin(self.patrol_angle) * self.patrol_radius
+        
+        # Apply accuracy imperfection
+        error_x = random.uniform(-20, 20) * (1.0 - self.accuracy)
+        error_y = random.uniform(-20, 20) * (1.0 - self.accuracy)
+        self.target_x += error_x
+        self.target_y += error_y
 
-        # Bounce off walls
+    def _move_towards_target(self, delta_time):
+        """Move towards target with smooth acceleration and human-like movement."""
+        # Calculate direction to target
+        dx = self.target_x - self.center_x
+        dy = self.target_y - self.center_y
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        if distance > 1.0:  # Avoid division by zero
+            # Normalize direction
+            dx /= distance
+            dy /= distance
+            
+            # Calculate desired velocity
+            desired_speed = min(self.max_speed, distance * 2)  # Slow down when close
+            desired_vel_x = dx * desired_speed
+            desired_vel_y = dy * desired_speed
+            
+            # Smooth acceleration towards desired velocity
+            accel_x = (desired_vel_x - self.velocity_x) * self.acceleration * delta_time
+            accel_y = (desired_vel_y - self.velocity_y) * self.acceleration * delta_time
+            
+            # Limit acceleration for more natural movement
+            max_accel = self.acceleration * delta_time
+            accel_magnitude = math.sqrt(accel_x*accel_x + accel_y*accel_y)
+            if accel_magnitude > max_accel:
+                accel_x = (accel_x / accel_magnitude) * max_accel
+                accel_y = (accel_y / accel_magnitude) * max_accel
+            
+            self.velocity_x += accel_x
+            self.velocity_y += accel_y
+            
+            # Limit maximum speed
+            vel_magnitude = math.sqrt(self.velocity_x*self.velocity_x + self.velocity_y*self.velocity_y)
+            if vel_magnitude > self.max_speed:
+                self.velocity_x = (self.velocity_x / vel_magnitude) * self.max_speed
+                self.velocity_y = (self.velocity_y / vel_magnitude) * self.max_speed
+
+    def _handle_wall_collisions(self, window_width, window_height):
+        """Handle wall collisions with natural bouncing behavior."""
         half_size = self.size / 2
-        if self.center_x <= half_size or self.center_x >= window_width - half_size:
-            self.direction_x *= -1
-        if self.center_y <= half_size or self.center_y >= window_height - half_size:
-            self.direction_y *= -1
-
-        # Keep within bounds
-        self.center_x = max(half_size, min(window_width - half_size, self.center_x))
-        self.center_y = max(half_size, min(window_height - half_size, self.center_y))
+        
+        if self.center_x <= half_size:
+            self.center_x = half_size
+            self.velocity_x = abs(self.velocity_x) * 0.8  # Bounce with some energy loss
+        elif self.center_x >= window_width - half_size:
+            self.center_x = window_width - half_size
+            self.velocity_x = -abs(self.velocity_x) * 0.8
+            
+        if self.center_y <= half_size:
+            self.center_y = half_size
+            self.velocity_y = abs(self.velocity_y) * 0.8
+        elif self.center_y >= window_height - half_size:
+            self.center_y = window_height - half_size
+            self.velocity_y = -abs(self.velocity_y) * 0.8
 
     def draw(self):
+        """Draw the predator with directional indicator."""
+        # Draw main body
         arcade.draw_circle_filled(self.center_x, self.center_y, self.size // 2, self.color)
+        
+        # Draw direction indicator (small triangle pointing in movement direction)
+        if abs(self.velocity_x) > 0.1 or abs(self.velocity_y) > 0.1:
+            indicator_length = self.size // 3
+            end_x = self.center_x + math.cos(self.rotation) * indicator_length
+            end_y = self.center_y + math.sin(self.rotation) * indicator_length
+            arcade.draw_line(self.center_x, self.center_y, end_x, end_y, arcade.color.WHITE, 2)
 
     def check_collision(self, player_x, player_y, player_size):
+        """Check collision with player."""
         distance = math.sqrt((self.center_x - player_x)**2 + (self.center_y - player_y)**2)
         return distance < (self.size + player_size) / 2
 
