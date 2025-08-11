@@ -305,6 +305,31 @@ class GameView(arcade.View):
             y = random.randint(FRUIT_SIZE, HEIGHT - FRUIT_SIZE)
             self.fruits.append(Fruit(x, y, color))
 
+    def spawn_new_fruit(self):
+        """Spawn a single new fruit at a random location."""
+        fruit_colors = [
+            arcade.color.RED,
+            arcade.color.ORANGE,
+            arcade.color.YELLOW,
+            arcade.color.GREEN,
+            arcade.color.BLUE,
+            arcade.color.PURPLE,
+            arcade.color.PINK,
+            arcade.color.LIME_GREEN,
+            arcade.color.CYAN,
+            arcade.color.MAGENTA,
+            arcade.color.GOLD,
+            arcade.color.SPRING_GREEN,
+            arcade.color.DEEP_PINK,
+            arcade.color.TURQUOISE,
+            arcade.color.VIOLET
+        ]
+        
+        color = random.choice(fruit_colors)
+        x = random.randint(FRUIT_SIZE, WIDTH - FRUIT_SIZE)
+        y = random.randint(FRUIT_SIZE, HEIGHT - FRUIT_SIZE)
+        self.fruits.append(Fruit(x, y, color))
+
     def on_draw(self):
         self.clear()
         
@@ -322,7 +347,8 @@ class GameView(arcade.View):
         # HUD
         fps = f"FPS: {arcade.get_fps():.0f}"
         score_text = f"Score: {self.score}"
-        fruits_text = f"Fruits: {self.fruits_collected}/15"
+        fruits_text = f"Fruits Collected: {self.fruits_collected}"
+        survival_text = "Survival Mode - Avoid the predators!"
         p1_controls = "P1: WASD"
         p2_controls = "P2: Arrows" if self.num_players == 2 else ""
         menu_nav = "Fullscreen: F11 | Menu: ESC"
@@ -330,6 +356,7 @@ class GameView(arcade.View):
         arcade.draw_text(fps, 10, self.window.height - 24, arcade.color.WHITE, 14)
         arcade.draw_text(score_text, 10, self.window.height - 48, arcade.color.YELLOW, 16)
         arcade.draw_text(fruits_text, 10, self.window.height - 72, arcade.color.YELLOW, 14)
+        arcade.draw_text(survival_text, 10, self.window.height - 96, arcade.color.LIGHT_BLUE, 14)
         arcade.draw_text(p1_controls, 10, 58, arcade.color.LIGHT_GRAY, 14)
         if self.num_players == 2:
             arcade.draw_text(p2_controls, 10, 34, arcade.color.LIGHT_GRAY, 14)
@@ -362,32 +389,6 @@ class GameView(arcade.View):
                 anchor_x="center"
             )
         
-        # Victory screen
-        elif len(self.fruits) == 0:
-            arcade.draw_text(
-                "YOU WIN!",
-                self.window.width / 2,
-                self.window.height / 2 + 50,
-                arcade.color.GREEN,
-                font_size=48,
-                anchor_x="center"
-            )
-            arcade.draw_text(
-                f"Final Score: {self.score}",
-                self.window.width / 2,
-                self.window.height / 2,
-                arcade.color.WHITE,
-                font_size=24,
-                anchor_x="center"
-            )
-            arcade.draw_text(
-                "Press ESC to return to menu",
-                self.window.width / 2,
-                self.window.height / 2 - 50,
-                arcade.color.LIGHT_GRAY,
-                font_size=18,
-                anchor_x="center"
-            )
 
     def update_player(self, player: arcade.Sprite, keys: Set[str], delta_time: float):
         dx = (("right" in keys) - ("left" in keys)) * MOVE_SPEED * delta_time
@@ -401,8 +402,8 @@ class GameView(arcade.View):
         player.center_y = max(half_h, min(self.window.height - half_h, new_y))
 
     def on_update(self, delta_time: float):
-        if self.game_over or len(self.fruits) == 0:
-            return  # Stop updating if game is over or won
+        if self.game_over:
+            return  # Stop updating if game is over
         
         # Update players
         self.update_player(self.player1, self.player1_keys, delta_time)
@@ -444,9 +445,11 @@ class GameView(arcade.View):
                         self.score += 10
                         self.fruits_collected += 1
 
-        # Remove collected fruits
+        # Remove collected fruits and spawn new ones
         for fruit in fruits_to_remove:
             self.fruits.remove(fruit)
+            # Spawn a new fruit to replace the collected one
+            self.spawn_new_fruit()
 
         # Check predator collisions with player 1
         for predator in self.predators:
