@@ -315,6 +315,7 @@ class GameView(arcade.View):
 
         # Game state
         self.game_over = False
+        self.paused = False
         self.score = 0
         self.fruits_collected = 0
 
@@ -426,7 +427,7 @@ class GameView(arcade.View):
         survival_text = "Survival Mode - Avoid the predators!"
         p1_controls = "P1: WASD"
         p2_controls = "P2: Arrows" if self.num_players == 2 else ""
-        menu_nav = "Fullscreen: F11 | Menu: ESC"
+        menu_nav = "Pause: P | Fullscreen: F11 | Menu: ESC"
         
         arcade.draw_text(fps, 10, self.window.height - 24, arcade.color.WHITE, 14)
         arcade.draw_text(score_text, 10, self.window.height - 48, arcade.color.YELLOW, 16)
@@ -436,6 +437,33 @@ class GameView(arcade.View):
         if self.num_players == 2:
             arcade.draw_text(p2_controls, 10, 34, arcade.color.LIGHT_GRAY, 14)
         arcade.draw_text(menu_nav, self.window.width - 10, 10, arcade.color.LIGHT_GRAY, 14, anchor_x="right")
+        
+        # Pause screen
+        if self.paused:
+            arcade.draw_text(
+                "PAUSED",
+                self.window.width / 2,
+                self.window.height / 2 + 50,
+                arcade.color.WHITE,
+                font_size=48,
+                anchor_x="center"
+            )
+            arcade.draw_text(
+                "Press P to resume",
+                self.window.width / 2,
+                self.window.height / 2,
+                arcade.color.LIGHT_GRAY,
+                font_size=24,
+                anchor_x="center"
+            )
+            arcade.draw_text(
+                "Press ESC to return to menu",
+                self.window.width / 2,
+                self.window.height / 2 - 30,
+                arcade.color.LIGHT_GRAY,
+                font_size=18,
+                anchor_x="center"
+            )
         
         # Game over screen
         if self.game_over:
@@ -477,8 +505,8 @@ class GameView(arcade.View):
         player.center_y = max(half_h, min(self.window.height - half_h, new_y))
 
     def on_update(self, delta_time: float):
-        if self.game_over:
-            return  # Stop updating if game is over
+        if self.game_over or self.paused:
+            return  # Stop updating if game is over or paused
         
         # Update players
         self.update_player(self.player1, self.player1_keys, delta_time)
@@ -554,9 +582,11 @@ class GameView(arcade.View):
             elif symbol == arcade.key.DOWN: self.player2_keys.add("down")
 
         # --- Global Controls ---
-        if symbol == arcade.key.F11:
+        if symbol == arcade.key.P:
+            self.paused = not self.paused  # Toggle pause
+        elif symbol == arcade.key.F11:
             self.window.set_fullscreen(not self.window.fullscreen)
-        if symbol == arcade.key.ESCAPE:
+        elif symbol == arcade.key.ESCAPE:
             menu_view = MenuView()
             self.window.show_view(menu_view)
 
