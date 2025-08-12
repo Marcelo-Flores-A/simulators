@@ -3,6 +3,7 @@ from typing import Set, List
 import arcade
 import random
 import math
+from audio_manager import AudioManager, AudioConfig
 
 # --- Constants ---
 WIDTH, HEIGHT = 960, 540
@@ -353,6 +354,12 @@ class GameView(arcade.View):
         self.fruits = []
         self.spawn_fruits()
 
+        # Initialize audio manager
+        self.audio_manager = AudioManager()
+        
+        # Start background music
+        self.audio_manager.start_background_music()
+
     def spawn_fruits(self):
         """Spawn fruits randomly on the map with colorful colors."""
         # Define a list of vibrant fruit colors
@@ -549,6 +556,9 @@ class GameView(arcade.View):
         # Remove collected fruits and spawn new ones
         for fruit in fruits_to_remove:
             self.fruits.remove(fruit)
+            # Play fruit collection sound (chance for special sound)
+            special = random.randint(1, AudioConfig.SPECIAL_FRUIT_CHANCE) == 1
+            self.audio_manager.play_fruit_collect(special=special)
             # Spawn a new fruit to replace the collected one
             self.spawn_new_fruit()
 
@@ -556,6 +566,8 @@ class GameView(arcade.View):
         for predator in self.predators:
             if predator.check_collision(self.player1.center_x, self.player1.center_y, self.player1.width):
                 self.game_over = True
+                self.audio_manager.play_game_over()
+                self.audio_manager.stop_background_music()
                 break
 
         # Check predator collisions with player 2 (if exists)
@@ -563,6 +575,8 @@ class GameView(arcade.View):
             for predator in self.predators:
                 if predator.check_collision(self.player2.center_x, self.player2.center_y, self.player2.width):
                     self.game_over = True
+                    self.audio_manager.play_game_over()
+                    self.audio_manager.stop_background_music()
                     break
 
     def on_key_press(self, symbol: int, modifiers: int):
@@ -582,6 +596,7 @@ class GameView(arcade.View):
         # --- Global Controls ---
         if symbol == arcade.key.P:
             self.paused = not self.paused  # Toggle pause
+            self.audio_manager.play_pause()
         elif symbol == arcade.key.F11:
             self.window.set_fullscreen(not self.window.fullscreen)
         elif symbol == arcade.key.ESCAPE:
@@ -648,6 +663,10 @@ class MenuView(arcade.View):
         super().__init__()
         self.buttons: List[TextButton] = []
         self.selected_button_index = 0  # Track which button is selected
+        
+        # Initialize audio manager for menu
+        self.audio_manager = AudioManager()
+        
         self.setup()
 
     def setup(self):
@@ -715,6 +734,7 @@ class MenuView(arcade.View):
         """Called when the user presses a mouse button."""
         for btn in self.buttons:
             if btn.hovered:
+                self.audio_manager.play_menu_click()
                 btn.on_click()
 
     def on_key_press(self, symbol: int, modifiers: int):
@@ -722,12 +742,15 @@ class MenuView(arcade.View):
         if symbol in [arcade.key.W, arcade.key.UP]:
             # Move selection up
             self.selected_button_index = (self.selected_button_index - 1) % len(self.buttons)
+            self.audio_manager.play_menu_click()
         elif symbol in [arcade.key.S, arcade.key.DOWN]:
             # Move selection down
             self.selected_button_index = (self.selected_button_index + 1) % len(self.buttons)
+            self.audio_manager.play_menu_click()
         elif symbol == arcade.key.ENTER:
             # Activate selected button
             if 0 <= self.selected_button_index < len(self.buttons):
+                self.audio_manager.play_menu_click()
                 self.buttons[self.selected_button_index].on_click()
 
 
