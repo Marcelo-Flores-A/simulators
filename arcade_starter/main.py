@@ -28,9 +28,7 @@ class App(arcade.Window):
         self.player_list.draw()
 
         # HUD
-        fps = f"FPS: {arcade.get_fps():.0f}"
         controls = "Move: WASD / Arrows   Fullscreen: F11   Quit: ESC"
-        arcade.draw_text(fps, 10, self.height - 24, arcade.color.WHITE, 14)
         arcade.draw_text(controls, 10, 10, arcade.color.LIGHT_GRAY, 14)
 
     def on_update(self, delta_time: float):
