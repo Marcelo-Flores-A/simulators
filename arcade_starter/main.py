@@ -421,7 +421,6 @@ class GameView(arcade.View):
         self.player_list.draw()
 
         # HUD
-        fps = f"FPS: {arcade.get_fps():.0f}"
         score_text = f"Score: {self.score}"
         fruits_text = f"Fruits Collected: {self.fruits_collected}"
         survival_text = "Survival Mode - Avoid the predators!"
@@ -429,7 +428,6 @@ class GameView(arcade.View):
         p2_controls = "P2: Arrows" if self.num_players == 2 else ""
         menu_nav = "Pause: P | Fullscreen: F11 | Menu: ESC"
         
-        arcade.draw_text(fps, 10, self.window.height - 24, arcade.color.WHITE, 14)
         arcade.draw_text(score_text, 10, self.window.height - 48, arcade.color.YELLOW, 16)
         arcade.draw_text(fruits_text, 10, self.window.height - 72, arcade.color.YELLOW, 14)
         arcade.draw_text(survival_text, 10, self.window.height - 96, arcade.color.LIGHT_BLUE, 14)
